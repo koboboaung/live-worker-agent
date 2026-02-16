@@ -1,12 +1,18 @@
-Worker VPS အသစ် git clone
+# Nginx install
+```bash
+sudo apt update
+sudo apt install nginx -y
+```
+
+# Worker VPS အသစ် git clone
 ```bash
 cd /var/www
 git clone https://github.com/koboboaung/live-worker-agent.git worker
 ```
 
-ပြီးမှ service file ကိုကိုယ်တိုင်ထည့်
+service file
 ```bash
-  nano /etc/systemd/system/worker_agent.service
+cp /var/www/worker/worker_agent.service /etc/systemd/system/
 ```
 (ဒီမှာ paste လုပ်)
 
