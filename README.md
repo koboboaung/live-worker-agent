@@ -42,6 +42,10 @@ sudo ufw status
 
 # rtmp 
 ```bash
+sudo apt update
+sudo apt install libnginx-mod-rtmp
+sudo systemctl restart nginx
+
 sudo nano /etc/nginx/nginx.conf
 ```
 
