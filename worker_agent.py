@@ -9,7 +9,7 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
-# Main server IPs ကိုပဲခွင့်ပြုမယ်
+# Main server IPs
 ALLOWED_IPS = ['38.60.244.208', '172.16.1.131']
 
 @app.route('/stats', methods=['GET'])
@@ -45,13 +45,13 @@ def restart_worker():
             print(f"Blocked restart attempt from {client_ip}")
             return jsonify({'error': 'Forbidden - IP not allowed'}), 403
         
-        # Log ထားမယ်
+        # Log
         print(f"Restart requested from {client_ip}")
         
-        # Response အရင်ပြန်ပေးမယ်
+        # Response
         response = jsonify({'status': 'success', 'message': 'Worker is restarting...'})
         
-        # Background thread နဲ့ restart လုပ်မယ်
+        # Background thread နဲ့ restart လုပ်
         def delayed_restart():
             import time
             time.sleep(1)  # Response ပြန်ပေးဖို့ 1 sec စောင့်
@@ -76,15 +76,6 @@ def health_check():
         'user': 'root'
     })
 
-@app.route('/start', methods=['POST'])
-def start_stream():
-    data = request.json
-    key = data.get('stream_key')
-    if not key: return jsonify({"status": "error"}), 400
-    subprocess.Popen(["bash", "/var/www/run_transcode.sh", str(key)], 
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    return jsonify({"status": "started"})
-
 @app.route('/start_encoder', methods=['POST'])
 def start_encoder():
     data = request.json
@@ -102,35 +93,51 @@ def start_encoder():
     map_index = 0
     var_stream_map = []
 
+    # RTMP or Restream (m3u8) check
+    is_rtmp = source_url.startswith('rtmp://')
+    is_restream = source_url.endswith('.m3u8') or 'm3u8' in source_url
+
     if r360:
-        cmd += ["-map", "0:v:0", "-map", "0:a:0", f"-s:v:{map_index}", "640x360", f"-b:v:{map_index}", "500k"]
+        cmd += ["-map", "0:v:0", "-map", "0:a:0", f"-s:v:{map_index}", "640x360", f"-b:v:{map_index}", "400k"]
         var_stream_map.append(f"v:{map_index},a:{map_index},name:360p")
         map_index += 1
     
     if r720:
-        cmd += ["-map", "0:v:0", "-map", "0:a:0", f"-s:v:{map_index}", "1280x720", f"-b:v:{map_index}", "1800k"]
+        cmd += ["-map", "0:v:0", "-map", "0:a:0", f"-s:v:{map_index}", "1280x720", f"-b:v:{map_index}", "1200k"]
         var_stream_map.append(f"v:{map_index},a:{map_index},name:720p")
         map_index += 1
 
     if r1080:
-        if source_url.endswith('.m3u8') or "http" in source_url:
+        if is_rtmp:
+            # RTMP ဆိုရင် 3000k နဲ့ re-encode
+            cmd += ["-map", "0:v:0", "-map", "0:a:0", 
+                    f"-s:v:{map_index}", "1920x1080", 
+                    f"-b:v:{map_index}", "3000k"]
+            print(f"RTMP source detected: Encoding 1080p at 3000kbps")
+        elif is_restream:
+            # Restream (m3u8) ဆိုရင် source အတိုင်း copy
             cmd += ["-map", "0:v:0", "-map", "0:a:0", "-c:v", "copy"]
+            print(f"Restream source detected: Copying 1080p from source")
         else:
-            cmd += ["-map", "0:v:0", "-map", "0:a:0", f"-s:v:{map_index}", "1920x1080", f"-b:v:{map_index}", "3500k"]
+            # အခြား source (ဥပမာ - local file) ဆိုရင် 3000k
+            cmd += ["-map", "0:v:0", "-map", "0:a:0", 
+                    f"-s:v:{map_index}", "1920x1080", 
+                    f"-b:v:{map_index}", "3000k"]
+        
         var_stream_map.append(f"v:{map_index},a:{map_index},name:1080p")
         map_index += 1
 
-    # HLS parameters with timestamp-based segment naming
+    # HLS parameters
     hls_options = [
         "-c:v", "libx264", "-preset", "veryfast", "-c:a", "aac",
         "-f", "hls",
         "-hls_time", "4",
-        "-hls_list_size", "20",              # Keep 20 segments in playlist
-        "-hls_flags", "delete_segments+split_by_time",  # Delete old + split by time
-        "-hls_segment_filename", f"{output_dir}/%v/%s.ts",  # %s = epoch time
+        "-hls_list_size", "20",
+        "-hls_flags", "delete_segments+split_by_time",
+        "-hls_segment_filename", f"{output_dir}/%v/%s.ts",
         "-hls_segment_type", "mpegts",
         "-master_pl_name", "master.m3u8",
-        "-strftime", "1"                       # Enable strftime for segment names
+        "-strftime", "1"
     ]
     
     if var_stream_map:
@@ -141,7 +148,7 @@ def start_encoder():
 
     cmd += hls_options
     
-    # Log the command for debugging
+    # Log 
     print(f"Running FFmpeg: {' '.join(cmd)}")
     
     subprocess.Popen(cmd)
@@ -173,4 +180,4 @@ def stop_encoder():
         
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
-     # dashboard ကပေးထားတဲ့ default port 5000 အတိုင်း စစချင်းတူအောင်ထားပါ ပြောင်းချင်ရင် နောက်မှပြောင်းပါ
+     # dashboard ကပြောင်းထားတဲ့ port အတိုင်း ဒီနှစ်ခုတူအောင်ထားပါ
