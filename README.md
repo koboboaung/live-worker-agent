@@ -40,6 +40,28 @@ sudo ufw allow 5000/tcp
 sudo ufw status
 ```
 
+# rtmp 
+```bash
+sudo nano /etc/nginx/nginx.conf
+```
+
+```
+rtmp {
+    server {
+        listen 1935;
+        chunk_size 4096;
+
+        application live {
+            live on;
+            record off;
+        }
+    }
+}
+```
+```bash
+sudo systemctl restart nginx
+sudo systemctl reload nginx
+```
 # run worker vps
 ```bash
   systemctl 
