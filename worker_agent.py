@@ -20,8 +20,8 @@ def get_stats():
             cmdline = proc.info.get('cmdline')
             if cmdline and any('ffmpeg' in arg for arg in cmdline):
                 cmd_str = " ".join(cmdline)
-                if '/var/www/hls/' in cmd_str:
-                    parts = cmd_str.split('/var/www/hls/')
+                if '/var/www/html/hls/' in cmd_str:
+                    parts = cmd_str.split('/var/www/html/hls/')
                     if len(parts) > 1:
                         key = parts[1].split('/')[0]
                         if key and key not in active_streams:
@@ -95,7 +95,7 @@ def start_encoder():
     r720 = data.get('res_720', 0)
     r1080 = data.get('res_1080', 0)
 
-    output_dir = f"/var/www/hls/{key}"
+    output_dir = f"/var/www/html/hls/{key}"
     os.makedirs(output_dir, exist_ok=True)
 
     cmd = ["ffmpeg", "-re", "-i", source_url]
@@ -103,12 +103,12 @@ def start_encoder():
     var_stream_map = []
 
     if r360:
-        cmd += ["-map", "0:v:0", "-map", "0:a:0", f"-s:v:{map_index}", "640x360", f"-b:v:{map_index}", "400k"]
+        cmd += ["-map", "0:v:0", "-map", "0:a:0", f"-s:v:{map_index}", "640x360", f"-b:v:{map_index}", "500k"]
         var_stream_map.append(f"v:{map_index},a:{map_index},name:360p")
         map_index += 1
     
     if r720:
-        cmd += ["-map", "0:v:0", "-map", "0:a:0", f"-s:v:{map_index}", "1280x720", f"-b:v:{map_index}", "1500k"]
+        cmd += ["-map", "0:v:0", "-map", "0:a:0", f"-s:v:{map_index}", "1280x720", f"-b:v:{map_index}", "1800k"]
         var_stream_map.append(f"v:{map_index},a:{map_index},name:720p")
         map_index += 1
 
@@ -116,7 +116,7 @@ def start_encoder():
         if source_url.endswith('.m3u8') or "http" in source_url:
             cmd += ["-map", "0:v:0", "-map", "0:a:0", "-c:v", "copy"]
         else:
-            cmd += ["-map", "0:v:0", "-map", "0:a:0", f"-s:v:{map_index}", "1920x1080", f"-b:v:{map_index}", "3000k"]
+            cmd += ["-map", "0:v:0", "-map", "0:a:0", f"-s:v:{map_index}", "1920x1080", f"-b:v:{map_index}", "3500k"]
         var_stream_map.append(f"v:{map_index},a:{map_index},name:1080p")
         map_index += 1
 
@@ -160,7 +160,7 @@ def stop_encoder():
             cmdline = proc.info.get('cmdline')
             if cmdline and any('ffmpeg' in arg for arg in cmdline):
                 cmd_str = " ".join(cmdline)
-                if f"/var/www/hls/{key}" in cmd_str or f"live/{key}" in cmd_str:
+                if f"/var/www/html/hls/{key}" in cmd_str or f"live/{key}" in cmd_str:
                     proc.kill()
                     found = True
         except (psutil.NoSuchProcess, psutil.AccessDenied):
@@ -173,4 +173,4 @@ def stop_encoder():
         
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
-     # dashboard ကပြောင်းထားတဲ့ port အတိုင်း ဒီနှစ်ခုတူညီရမည်
+     # dashboard ကပြောင်းထားတဲ့ port အတိုင်း ဒီနှစ်ခုတူအောင်ထားပါ
