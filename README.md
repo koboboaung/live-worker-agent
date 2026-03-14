@@ -14,12 +14,15 @@ pip3 install flask flask-cors psutil
 
 # git clone
 ```bash
+sudo apt update
+sudo apt install git
 cd /var/www
 git clone https://github.com/koboboaung/live-worker-agent.git worker
 ```
 
 # service file
 ```bash
+cd
 cp /var/www/worker/worker_agent.py /var/www/
 cp /var/www/worker/worker_agent.service /etc/systemd/system/
 ```
@@ -29,16 +32,18 @@ cp /var/www/worker/worker_agent.service /etc/systemd/system/
 sudo apt install ffmpeg
 ```
 
+# port open
+```bash
+apt update
+apt install ufw -y
+sudo ufw allow 5000/tcp
+sudo ufw status
+```
+
 # run worker vps
 ```bash
   systemctl 
   sudo systemctl daemon-reload
   sudo systemctl start worker_agent
   systemctl start worker_agent
-```
-
-# port open
-```bash
-sudo ufw allow 5000/tcp
-sudo ufw status
 ```
