@@ -10,7 +10,7 @@ app = Flask(__name__)
 CORS(app)
 
 # Main server IPs ကိုပဲခွင့်ပြုမယ်
-ALLOWED_IPS = ['38.60.244.208', '127.0.0.1']  # ခင်ဗျား Main Server IP ထည့်ပါ
+ALLOWED_IPS = ['38.60.244.208', '172.16.1.131']
 
 @app.route('/stats', methods=['GET'])
 def get_stats():
