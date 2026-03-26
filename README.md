@@ -70,10 +70,11 @@ sudo systemctl reload nginx
 ```
 run worker vps
 ```bash
-  systemctl 
-  sudo systemctl daemon-reload
-  sudo systemctl start worker_agent
-  systemctl start worker_agent
+systemctl 
+sudo systemctl daemon-reload
+sudo systemctl start worker_agent
+systemctl start worker_agent
+systemctl restart worker_agent
 ```
 
 auto start worker (vps reboot)
