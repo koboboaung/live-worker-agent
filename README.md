@@ -38,8 +38,17 @@ sudo apt install ffmpeg
 ```bash
 apt update
 apt install ufw -y
+
+#  ufw status စစ်ပါ မရှိရင်
+
+apt update && apt install nano -y
+echo "127.0.0.1 vpsname.vm vpsname" >> /etc/hosts
+
+sudo ufw enable
+sudo ufw allow 22/tcp
+sudo ufw allow 80/tcp
+sudo ufw allow 1935/tcp
 sudo ufw allow 5000/tcp
-sudo ufw status
 ```
 
 rtmp install
