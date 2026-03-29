@@ -70,9 +70,9 @@ def start_encoder():
         var_map.append(f"v:{i},a:{i},name:{c['name']}")
     
     cmd = ["ffmpeg","-y","-re","-i",src,"-filter_complex",";".join(filt),*map_v,*map_a,
-           "-preset","superfast","-tune","zerolatency","-g","60","-keyint_min","60","-sc_threshold","0",
+           "-preset","superfast","-tune","zerolatency","-g","120","-keyint_min","120","-sc_threshold","0",
            "-c:a","aac","-b:a","128k","-ac","2",*enc,
-           "-f","hls","-hls_time","2","-hls_list_size","10","-hls_flags","delete_segments+split_by_time",
+           "-f","hls","-hls_time","4","-hls_list_size","5","-hls_flags","delete_segments+split_by_time",
            "-hls_segment_type","mpegts","-hls_segment_filename",f"{out_dir}/%v/%s.ts","-strftime","1",
            "-var_stream_map"," ".join(var_map),"-master_pl_name","playlist.m3u8",f"{out_dir}/%v/chunks.m3u8"]
     
