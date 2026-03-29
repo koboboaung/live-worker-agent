@@ -10,7 +10,6 @@ pip3 သွင်းရန်
 ```bash
 sudo apt update
 sudo apt install python3-pip -y
-pip3 --version
 pip3 install flask flask-cors psutil
 ```
 
@@ -36,19 +35,16 @@ sudo apt install ffmpeg
 
 # port open
 ```bash
-apt update
+sudo apt update
 apt install ufw -y
-
-#  ufw status စစ်ပါ မရှိရင်
-
 apt update && apt install nano -y
-echo "127.0.0.1 vpsname.vm vpsname" >> /etc/hosts
-
-sudo ufw enable
+echo "127.0.0.1 yourhostname.vm yourhostname" >> /etc/hosts
 sudo ufw allow 22/tcp
 sudo ufw allow 80/tcp
 sudo ufw allow 1935/tcp
 sudo ufw allow 5000/tcp
+sudo ufw enable
+sudo ufw status
 ```
 
 rtmp install
@@ -82,8 +78,7 @@ run worker vps
 systemctl 
 sudo systemctl daemon-reload
 sudo systemctl start worker_agent
-systemctl start worker_agent
-systemctl restart worker_agent
+sudo systemctl restart worker_agent
 ```
 
 auto start worker (vps reboot)
