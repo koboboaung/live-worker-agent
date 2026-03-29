@@ -74,7 +74,7 @@ def start_encoder():
            "-c:a","aac","-b:a","128k","-ac","2",*enc,
            "-f","hls","-hls_time","2","-hls_list_size","10","-hls_flags","delete_segments+split_by_time",
            "-hls_segment_type","mpegts","-hls_segment_filename",f"{out_dir}/%v/%s.ts","-strftime","1",
-           "-var_stream_map"," ".join(var_map),"-master_pl_name","playlist.m3u8",f"{out_dir}/%v/index.m3u8"]
+           "-var_stream_map"," ".join(var_map),"-master_pl_name","playlist.m3u8",f"{out_dir}/%v/chunks.m3u8"]
     
     try:
         subprocess.Popen(cmd)
