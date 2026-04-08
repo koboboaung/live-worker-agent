@@ -52,9 +52,9 @@ def start_encoder():
     os.makedirs(out_dir, exist_ok=True)
     
     cfg = {
-        '360': {'scale': '640:360', 'b': '472k', 'max': '600k', 'buf': '800k', 'name': '360p'},
-        '720': {'scale': '1280:720', 'b': '1372k', 'max': '1800k', 'buf': '2500k', 'name': '720p'},
-        '1080': {'scale': '1920:1080', 'b': '3052k', 'max': '4000k', 'buf': '6000k', 'name': '1080p'}
+        '360': {'scale': '640:360', 'b': '700k', 'max': '1000k', 'buf': '1400k', 'name': '360p'},
+        '720': {'scale': '1280:720', 'b': '1500k', 'max': '2000k', 'buf': '3000k', 'name': '720p'},
+        '1080': {'scale': '1920:1080', 'b': '3500k', 'max': '4500k', 'buf': '7000k', 'name': '1080p'}
     }
     
     outputs = [f'v{r}' for r in [360,720,1080] if res[r]]
@@ -66,13 +66,13 @@ def start_encoder():
         filt.append(f"[{o}]scale={c['scale']}[{o}out]")
         map_v.extend(["-map", f"[{o}out]"])
         map_a.extend(["-map", "0:a:0"])
-        enc.extend([f"-c:v:{i}", "libx264", f"-b:v:{i}", c['b'], f"-maxrate:v:{i}", c['max'], f"-bufsize:v:{i}", c['buf'], f"-profile:v:{i}", "baseline"])
+        enc.extend([f"-c:v:{i}", "libx264", f"-b:v:{i}", c['b'], f"-maxrate:v:{i}", c['max'], f"-bufsize:v:{i}", c['buf'], f"-profile:v:{i}", "baseline"]) # baseline or main
         var_map.append(f"v:{i},a:{i},name:{c['name']}")
     
     cmd = ["ffmpeg","-y","-re","-i",src,"-filter_complex",";".join(filt),*map_v,*map_a,
            "-preset","superfast","-tune","zerolatency","-g","120","-keyint_min","120","-sc_threshold","0",
            "-c:a","aac","-b:a","128k","-ac","2",*enc,
-           "-f","hls","-hls_time","4","-hls_list_size","5","-hls_flags","delete_segments+split_by_time",
+           "-f","hls","-hls_time","4","-hls_list_size","6","-hls_flags","delete_segments+split_by_time",
            "-hls_segment_type","mpegts","-hls_segment_filename",f"{out_dir}/%v/%s.ts","-strftime","1",
            "-var_stream_map"," ".join(var_map),"-master_pl_name","playlist.m3u8",f"{out_dir}/%v/chunks.m3u8"]
     
@@ -100,4 +100,4 @@ def stop_encoder():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
-    # dashboard ကပြောင်းထားတဲ့ port အတိုင်း ဒီနှစ်ခုတူညီရမည်
+    # dashboard worker server ဘက်က port နဲ့ အတူတူးထားရမယ်။
