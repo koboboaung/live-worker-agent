@@ -6,6 +6,12 @@ sudo apt update
 sudo apt install nginx -y
 ```
 
+PHP-FPM install
+```bash
+sudo apt update
+sudo apt install php-fpm php-cli -y
+```
+
 pip3 သွင်းရန်
 ```bash
 sudo apt update
@@ -26,6 +32,12 @@ service file
 cd
 cp /var/www/worker/worker_agent.py /var/www/
 cp /var/www/worker/worker_agent.service /etc/systemd/system/
+```
+
+API Track Folder
+```bash
+sudo chown -R www-data:www-data /var/www/html/tmp/tracking
+sudo chmod -R 775 /var/www/html/tmp/tracking
 ```
 
 ffmpeg install
@@ -69,6 +81,34 @@ rtmp {
     }
 }
 ```
+/etc/nginx/sites-available/default
+```bash
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    root /var/www/html;
+    index index.php index.html index.htm index.nginx-debian.html;
+    server_name _;
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+    
+	location ~ ^/live/([^/]+)/(.*\.m3u8)$ {
+		rewrite ^/live/([^/]+)/(.*\.m3u8)$ /live.php?channel=$1&file=$2 last;
+	}
+
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        
+        # သတိပြုရန် - သင့်စက်မှာ သွင်းထားတဲ့ PHP version ကိုက်ညီဖို့ လိုပါမယ် (ဥပမာ php8.1, php7.4 စသဖြင့်)
+        fastcgi_pass unix:/var/run/php/php8.1-fpm.sock; 
+    }
+}
+
+
+```
+
 ```bash
 sudo systemctl restart nginx
 sudo systemctl reload nginx
