@@ -1,74 +1,97 @@
-# MMDP live stream worker
+# MMDP Live Stream Worker (RTMP + SRT)
 
-Nginx install
+၁။ အခြေခံ Server Packages များ သွင်းရန်
+
+Nginx Install
 ```bash
 sudo apt update
 sudo apt install nginx -y
+PHP-FPM Install
 ```
 
-PHP-FPM install
 ```bash
 sudo apt update
 sudo apt install php-fpm php-cli -y
+Python3 & pip3 Install
 ```
 
-pip3 သွင်းရန်
 ```bash
 sudo apt update
 sudo apt install python3-pip -y
 pip3 install flask flask-cors psutil
+Git Install
 ```
 
-git clone
 ```bash
 sudo apt update
-sudo apt install git
+sudo apt install git -y
+```
+
+၂။ Worker Agent (Python API) သွင်းရန် Git Clone
+```bash
 cd /var/www
 git clone https://github.com/koboboaung/live-worker-agent.git worker
 ```
 
-service file
+Service File ဖန်တီးရန်
 ```bash
 cd
 cp /var/www/worker/worker_agent.py /var/www/
 cp /var/www/worker/worker_agent.service /etc/systemd/system/
+API Track Folder (HLS Output) Permissions
 ```
 
-API Track Folder
 ```bash
+sudo mkdir -p /var/www/html/tmp/tracking
 sudo chown -R www-data:www-data /var/www/html/tmp/tracking
 sudo chmod -R 775 /var/www/html/tmp/tracking
 ```
 
-ffmpeg install
+HLS Folder အတွက်
 ```bash
-sudo apt install ffmpeg
+sudo mkdir -p /var/www/html/hls
+sudo chown -R www-data:www-data /var/www/html/hls
+sudo chmod -R 775 /var/www/html/hls
 ```
 
-# port open
+၃။ FFmpeg သွင်းရန်
+```bash
+sudo apt install ffmpeg -y
+```
+
+၄။ Firewall (Port များ ဖွင့်ရန်)
 ```bash
 sudo apt update
 apt install ufw -y
 apt update && apt install nano -y
+```
+
+သင့် Hostname ကို ထည့်သွင်းရန်
 echo "127.0.0.1 yourhostname.vm yourhostname" >> /etc/hosts
+```bash
 sudo ufw allow 22/tcp
 sudo ufw allow 80/tcp
-sudo ufw allow 1935/tcp
-sudo ufw allow 5000/tcp
+sudo ufw allow 1935/tcp   # RTMP
+sudo ufw allow 8888/udp   # SRT (UDP Port ဖြစ်ရန် အရေးကြီးသည်)
+sudo ufw allow 5000/tcp   # Python API
 sudo ufw enable
 sudo ufw status
 ```
 
-rtmp install
+၅။ RTMP Server (Nginx-RTMP) သွင်းရန်
 ```bash
 sudo apt update
-sudo apt install libnginx-mod-rtmp
+sudo apt install libnginx-mod-rtmp -y
 sudo systemctl restart nginx
+```
 
+Nginx Configuration ပြင်ရန်
+```bash
 sudo nano /etc/nginx/nginx.conf
 ```
 
-```
+အောက်ပါ Code ကို ဖိုင်၏ အောက်ဆုံးတွင် ထည့်ပါ - Nginx
+```bash
 rtmp {
     server {
         listen 1935;
@@ -81,7 +104,14 @@ rtmp {
     }
 }
 ```
-/etc/nginx/sites-available/default
+
+Nginx Web Site Configuration ပြင်ရန်
+```bash
+sudo nano /etc/nginx/sites-available/default
+```
+အောက်ပါအတိုင်း အစားထိုးပါ (PHP Version ကို မိမိသွင်းထားသည့်အတိုင်း ပြင်ပါ ဥပမာ- 8.1)-
+
+Nginx
 ```bash
 server {
     listen 80 default_server;
@@ -94,34 +124,114 @@ server {
         try_files $uri $uri/ =404;
     }
     
-	location ~ ^/live/([^/]+)/(.*\.m3u8)$ {
-		rewrite ^/live/([^/]+)/(.*\.m3u8)$ /live.php?channel=$1&file=$2 last;
-	}
+    location ~ ^/live/([^/]+)/(.*\.m3u8)$ {
+        rewrite ^/live/([^/]+)/(.*\.m3u8)$ /live.php?channel=$1&file=$2 last;
+    }
 
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
-        
-        # သတိပြုရန် - သင့်စက်မှာ သွင်းထားတဲ့ PHP version ကိုက်ညီဖို့ လိုပါမယ် (ဥပမာ php8.1, php7.4 စသဖြင့်)
         fastcgi_pass unix:/var/run/php/php8.1-fpm.sock; 
     }
 }
-
-
 ```
 
+
+Nginx ကို Restart ချရန်
 ```bash
 sudo systemctl restart nginx
 sudo systemctl reload nginx
 ```
-run worker vps
+
+၆။ SRT Server (SLS) သွင်းရန် (NEW)
+လိုအပ်သော Build Tools များ သွင်းရန်
 ```bash
-systemctl 
+sudo apt update
+sudo apt install -y build-essential cmake pkg-config tclsh linux-headers-generic libssl-dev
+```
+
+SRT Library Compile လုပ်ရန်
+```bash
+cd /usr/src
+sudo git clone https://github.com/Haivision/srt.git
+cd srt
+sudo ./configure
+sudo make
+sudo make install
+sudo ldconfig
+```
+
+SRT Live Server (SLS) Compile လုပ်ရန်
+```bash
+cd /usr/src
+sudo git clone https://github.com/Edward-Wu/srt-live-server.git
+cd srt-live-server
+sudo make
+SLS Configuration ဖန်တီးရန်
+```
+
+```bash
+sudo nano /usr/src/srt-live-server/sls.conf
+```
+အောက်ပါ Code ကို ထည့်ပါ- Code snippet
+```bash
+srt {
+    worker_threads  1;
+    worker_connections 300;
+    log_file logs/error.log; 
+    log_level info;
+    
+    server {
+        listen 8888; 
+        latency 20;
+
+        domain_player play.stream;
+        domain_publisher push.stream;
+        backlog 100;
+        idle_streams_timeout 60;
+        
+        app {
+            app_player live;
+            app_publisher live;
+            record_hls off; 
+        }
+    }
+}
+```
+
+SLS Service ဖန်တီးရန်
+```bash
+sudo nano /etc/systemd/system/sls.service
+```
+
+အောက်ပါ Code ကို ထည့်ပါ-
+```bash
+[Unit]
+Description=SRT Live Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/usr/src/srt-live-server
+ExecStart=/usr/src/srt-live-server/bin/sls -c /usr/src/srt-live-server/sls.conf
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+၇။ Service အားလုံးကို Start & Enable လုပ်ရန်
+Worker Agent ကို နှိုးရန်
+```bash
 sudo systemctl daemon-reload
 sudo systemctl start worker_agent
+sudo systemctl enable worker_agent
 sudo systemctl restart worker_agent
 ```
 
-auto start worker (vps reboot)
+SRT Server ကို နှိုးရန်
 ```bash
-sudo systemctl enable worker_agent
+sudo systemctl start sls
+sudo systemctl enable sls
+sudo systemctl status sls
 ```
