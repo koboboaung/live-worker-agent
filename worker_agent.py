@@ -128,11 +128,17 @@ def start_encoder():
            "-var_stream_map", " ".join(var_map), "-master_pl_name", "playlist.m3u8", f"{out_dir}/%v/chunks.m3u8"])
     
     try:
-        subprocess.Popen(cmd)
+        subprocess.Popen(
+            cmd, 
+            stdout=subprocess.DEVNULL, 
+            stderr=subprocess.DEVNULL, 
+            stdin=subprocess.DEVNULL, 
+            close_fds=True
+        )
         threading.Thread(target=patch_m3u8, args=(f"{out_dir}/playlist.m3u8",), daemon=True).start()
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
-    
+        
     return jsonify({"status": "started", "key": key, "streams": var_map})
 
 @app.route('/stop_encoder', methods=['POST'])
