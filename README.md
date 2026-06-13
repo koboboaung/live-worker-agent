@@ -6,22 +6,22 @@ Nginx Install
 ```bash
 sudo apt update
 sudo apt install nginx -y
-PHP-FPM Install
 ```
 
+PHP-FPM Install
 ```bash
 sudo apt update
 sudo apt install php-fpm php-cli -y
-Python3 & pip3 Install
 ```
 
+Python3 & pip3 Install
 ```bash
 sudo apt update
 sudo apt install python3-pip -y
-pip3 install flask flask-cors psutil
-Git Install
+sudo apt install python3-flask python3-flask-cors python3-psutil -y
 ```
 
+Git Install
 ```bash
 sudo apt update
 sudo apt install git -y
@@ -38,16 +38,9 @@ Service File ဖန်တီးရန်
 cd
 cp /var/www/worker/worker_agent.py /var/www/
 cp /var/www/worker/worker_agent.service /etc/systemd/system/
-API Track Folder (HLS Output) Permissions
 ```
 
-```bash
-sudo mkdir -p /var/www/html/tmp/tracking
-sudo chown -R www-data:www-data /var/www/html/tmp/tracking
-sudo chmod -R 775 /var/www/html/tmp/tracking
-```
-
-HLS Folder အတွက်
+HLS Folder
 ```bash
 sudo mkdir -p /var/www/html/hls
 sudo chown -R www-data:www-data /var/www/html/hls
@@ -71,9 +64,9 @@ echo "127.0.0.1 yourhostname.vm yourhostname" >> /etc/hosts
 ```bash
 sudo ufw allow 22/tcp
 sudo ufw allow 80/tcp
-sudo ufw allow 1935/tcp   # RTMP
-sudo ufw allow 8888/udp   # SRT (UDP Port ဖြစ်ရန် အရေးကြီးသည်)
-sudo ufw allow 5000/tcp   # Python API
+sudo ufw allow 1935/tcp
+sudo ufw allow 8888/udp
+sudo ufw allow 5000/tcp
 sudo ufw enable
 sudo ufw status
 ```
@@ -109,7 +102,7 @@ Nginx Web Site Configuration ပြင်ရန်
 ```bash
 sudo nano /etc/nginx/sites-available/default
 ```
-အောက်ပါအတိုင်း အစားထိုးပါ (PHP Version ကို မိမိသွင်းထားသည့်အတိုင်း ပြင်ပါ ဥပမာ- 8.1)-
+အောက်ပါအတိုင်း အစားထိုးပါ (PHP Version ကို မိမိသွင်းထားသည့်အတိုင်း ပြင်ပါ ဥပမာ- 8.3)-
 
 Nginx
 ```bash
@@ -130,7 +123,7 @@ server {
 
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:/var/run/php/php8.1-fpm.sock; 
+        fastcgi_pass unix:/var/run/php/php8.3-fpm.sock; 
     }
 }
 ```
@@ -166,13 +159,13 @@ cd /usr/src
 sudo git clone https://github.com/Edward-Wu/srt-live-server.git
 cd srt-live-server
 sudo make
-SLS Configuration ဖန်တီးရန်
 ```
 
+SLS Configuration ဖန်တီးရန်
 ```bash
 sudo nano /usr/src/srt-live-server/sls.conf
 ```
-အောက်ပါ Code ကို ထည့်ပါ- Code snippet
+အောက်က Code ကို ထည့်ပါ အဟောင်းတွေအားလုံးဖျက် အသစ်ထည့်- Code snippet
 ```bash
 srt {
     worker_threads  1;
@@ -198,7 +191,7 @@ srt {
 }
 ```
 
-SLS Service ဖန်တီးရန်
+SLS Service အသစ် ဖန်တီးရန်
 ```bash
 sudo nano /etc/systemd/system/sls.service
 ```
