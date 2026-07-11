@@ -168,19 +168,19 @@ sudo nano /usr/src/srt-live-server/sls.conf
 အောက်က Code ကို ထည့်ပါ အဟောင်းတွေအားလုံးဖျက် အသစ်ထည့်- Code snippet
 ```bash
 srt {
-    worker_threads  1;
-    worker_connections 300;
+    worker_threads 0;# CPU Core အပေါ်မူတည်ပြီး တိုးပေးနိုင်ပါတယ်။ 0, က auto, 2 (သို့) 4 ထားရင် ပိုကောင်းပါတယ်။
+    worker_connections 100;
     log_file logs/error.log; 
     log_level info;
     
     server {
         listen 8888; 
-        latency 20;
+        latency 200;
 
-        domain_player play.stream;
-        domain_publisher push.stream;
+        domain_player playstream;
+        domain_publisher pushstream;
         backlog 100;
-        idle_streams_timeout 60;
+        idle_streams_timeout -1;
         
         app {
             app_player live;
@@ -227,4 +227,5 @@ SRT Server ကို နှိုးရန်
 sudo systemctl start sls
 sudo systemctl enable sls
 sudo systemctl status sls
+sudo systemctl restart sls
 ```
