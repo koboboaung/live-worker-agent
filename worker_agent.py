@@ -293,6 +293,7 @@ def start_encoder():
     cmd.extend([
         "-rw_timeout", "10000000",  
         "-listen_timeout", "10000",  
+        "-fflags", "+genpts+discardcorrupt", 
         "-i", src
     ])
     
@@ -306,7 +307,8 @@ def start_encoder():
         "-fps_mode", "cfr",          
         
         *enc,
-        "-f", "hls", "-hls_time", "4", "-hls_list_size", "10", "-hls_flags", "delete_segments+split_by_time+independent_segments",
+        "-f", "hls", "-hls_time", "4", "-hls_list_size", "10", 
+        "-hls_flags", "delete_segments+independent_segments+append_list", 
         "-hls_segment_type", "mpegts", "-vtag", "avc1", "-hls_segment_filename", f"{out_dir}/%v/%s.ts", "-strftime", "1",
         "-var_stream_map", " ".join(var_map), "-master_pl_name", "playlist.m3u8", f"{out_dir}/%v/chunks.m3u8"
     ])
@@ -319,7 +321,6 @@ def start_encoder():
         return jsonify({"status": "error", "message": str(e)}), 500
         
     return jsonify({"status": "started", "key": key, "streams": var_map})
-
 
 @app.route('/stop_encoder', methods=['POST'])
 def stop_encoder():
