@@ -168,24 +168,25 @@ sudo nano /usr/src/srt-live-server/sls.conf
 အောက်က Code ကို ထည့်ပါ အဟောင်းတွေအားလုံးဖျက် အသစ်ထည့်- Code snippet
 ```bash
 srt {
-    worker_threads 2; 
-    worker_connections 100; 
-    log_file logs/error.log; 
-    log_level info; 
+    worker_threads 1;
+    worker_connections 100;
+    log_file logs/error.log;
+    log_level info;
+	record_hls_path_prefix /var/www/html/dvr;
     
     server {
         listen 8888;
-        latency 1000;
+        latency 200;
         domain_player playstream;
         domain_publisher pushstream;
         backlog 100;
-        idle_streams_timeout 10;
-		peer_idle_timeout 10000;
+        idle_streams_timeout 60; #s -1: unlimited
         
         app {
             app_player live;
             app_publisher live;
-            record_hls off;
+            record_hls off; #on
+			record_hls_segment_duration 10; #unit s
         }
     }
 }
