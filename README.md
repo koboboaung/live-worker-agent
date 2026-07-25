@@ -59,16 +59,17 @@ apt install ufw -y
 apt update && apt install nano -y
 ```
 
-သင့် Hostname ကို ထည့်သွင်းရန်
+သင့် Hostname ကို ထည့်သွင်းရန် လိုအပ်လျှင်
 echo "127.0.0.1 yourhostname.vm yourhostname" >> /etc/hosts
 ```bash
+sudo ufw enable
 sudo ufw allow 22/tcp
 sudo ufw allow 80/tcp
-sudo ufw allow 1935/tcp
-sudo ufw allow 8888/udp
-sudo ufw allow 8888/tcp
 sudo ufw allow 5000/tcp
-sudo ufw enable
+sudo ufw allow 1935/tcp
+sudo ufw allow 1935/udp
+sudo ufw allow 8888/tcp
+sudo ufw allow 8888/udp
 sudo ufw status
 ```
 
