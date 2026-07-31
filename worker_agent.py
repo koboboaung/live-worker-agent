@@ -36,7 +36,7 @@ def vod_encode_and_upload(video_id, user_id, videoname, source_url, webhook_url,
         f.write(f"{key_api_url}\n")
         f.write(f"{key_file_path}\n")
 
-    # --- 9:16 Vertical Video အတွက် ABR Config ---
+    # --- 9:16 Vertical Video ABR Config ---
     cfg = {
         360: {'scale': '360:640', 'b': '800k', 'max': '1000k', 'buf': '1500k', 'name': '360p'},
         720: {'scale': '720:1280', 'b': '1700k', 'max': '2000k', 'buf': '3000k', 'name': '720p'},
@@ -95,7 +95,7 @@ def vod_encode_and_upload(video_id, user_id, videoname, source_url, webhook_url,
             raise Exception(f"FFmpeg Error: {error_msg}")
         
         # ==========================================
-        # DO Spaces (Wasabi S3) သို့ လမ်းကြောင်းသစ်ဖြင့် Upload တင်ခြင်း
+        # DO Spaces (Wasabi S3) Upload
         # ==========================================
         s3_client = boto3.client('s3',
             region_name='ap-southeast-1',
@@ -229,6 +229,88 @@ def get_stats():
         except Exception: 
             continue
     return jsonify({"cpu_usage": psutil.cpu_percent(), "ram_usage": psutil.virtual_memory().percent, "active_streams": active})
+
+# ==========================================
+# 3. BANDWIDTH MONITORING THREAD
+# ==========================================
+server_bandwidth = {
+    "download_mbps": 0.0,
+    "upload_mbps": 0.0,
+    "total_mbps": 0.0
+}
+
+def track_bandwidth():
+    global server_bandwidth
+    last_io = psutil.net_io_counters()
+    
+    while True:
+        time.sleep(1)
+        current_io = psutil.net_io_counters()
+        
+        dl_mbps = (current_io.bytes_recv - last_io.bytes_recv) * 8 / 1_000_000
+        ul_mbps = (current_io.bytes_sent - last_io.bytes_sent) * 8 / 1_000_000
+        
+        server_bandwidth["download_mbps"] = round(dl_mbps, 2)
+        server_bandwidth["upload_mbps"] = round(ul_mbps, 2)
+        server_bandwidth["total_mbps"] = round(dl_mbps + ul_mbps, 2)
+        
+        last_io = current_io
+
+threading.Thread(target=track_bandwidth, daemon=True).start()
+
+active_srt_streams = {
+    "push_inputs": 0,
+    "pull_outputs": 0,
+    "active_connections": []
+}
+
+@app.route('/sls/on_event', methods=['GET', 'POST'])
+def sls_on_event():
+    global active_srt_streams
+    
+    if request.method == 'POST':
+        event_data = {}
+        if request.is_json:
+            event_data = request.json
+        elif request.form:
+            event_data = dict(request.form)
+        else:
+            event_data = dict(request.args)
+            
+        if not event_data and request.data:
+            try:
+                import json
+                event_data = json.loads(request.data.decode('utf-8'))
+            except:
+                pass
+
+        event_type = event_data.get('on_event')
+        role = event_data.get('role_name')
+        
+        if event_type == 'on_connect':
+            if role == 'publisher':
+                active_srt_streams['push_inputs'] += 1
+            elif role == 'player':
+                active_srt_streams['pull_outputs'] += 1
+            active_srt_streams['active_connections'].append(event_data)
+                
+        elif event_type == 'on_close':
+            if role == 'publisher' and active_srt_streams['push_inputs'] > 0:
+                active_srt_streams['push_inputs'] -= 1
+            elif role == 'player' and active_srt_streams['pull_outputs'] > 0:
+                active_srt_streams['pull_outputs'] -= 1
+                
+            active_srt_streams['active_connections'] = [
+                conn for conn in active_srt_streams['active_connections'] 
+                if not (conn.get('remote_ip') == event_data.get('remote_ip') and conn.get('remote_port') == event_data.get('remote_port'))
+            ]
+            
+        return jsonify({"status": "success"})
+        
+    else:
+        response_data = active_srt_streams.copy()
+        response_data["bandwidth"] = server_bandwidth
+        return jsonify(response_data)
 
 @app.route('/restart', methods=['POST'])
 def restart_worker():
