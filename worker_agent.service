@@ -1,6 +1,7 @@
 [Unit]
 Description=Python Worker Agent for Streaming
-After=network.target
+After=network.target sls.service
+Wants=sls.service
 
 [Service]
 User=root
@@ -8,6 +9,8 @@ WorkingDirectory=/var/www
 ExecStart=/usr/bin/python3 /var/www/worker_agent.py
 Restart=always
 RestartSec=60
+
+ExecStopPost=/bin/systemctl restart sls
 
 [Install]
 WantedBy=multi-user.target
