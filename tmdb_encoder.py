@@ -36,7 +36,7 @@ def process_tmdb_encode(job_id, filename, user_id, download_url, webhook_url, s3
             with open(input_file, 'wb') as f:
                 for chunk in r.iter_content(chunk_size=8192):
                     f.write(chunk)
-        # 🟢 ဖိုင်ဆိုဒ် (Bytes) ကို ရယူခြင်း
+        # Get (Bytes)
         file_size = os.path.getsize(input_file) if os.path.exists(input_file) else 0
 
         # 2. Generate AES-128 Key & Key Info
@@ -159,12 +159,10 @@ def start_tmdb_encode():
     s3_config = data.get('s3_config')
 
     if not all([job_id, filename, user_id, download_url, webhook_url, s3_config]):
-        # Field တွေ လိုနေရင် ယူထားတဲ့ Lock ကို ပြန်ဖြုတ်ပေးဖို့ လိုပါတယ်
         with encode_lock:
             is_encoding_in_progress = False
         return jsonify({"status": "error", "message": "Missing required fields"}), 400
 
-    # Background Worker Thread
     def background_worker():
         global is_encoding_in_progress
         try:
