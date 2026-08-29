@@ -27,7 +27,7 @@ active_srt_streams = {"push_inputs": 0, "pull_outputs": 0, "active_connections":
 # HELPER FUNCTIONS
 # ==========================================
 def patch_m3u8(filepath):
-    """Playlist FRAME-RATE=25 Helper"""
+    """Playlist ထဲတွင် FRAME-RATE=25 ထည့်သွင်းပေးသည့် Helper"""
     for _ in range(15):
         if os.path.exists(filepath):
             time.sleep(1)
@@ -100,7 +100,7 @@ def track_bandwidth():
         
         last_io = current_io
 
-# Background Threads စတင်ခြင်း
+# Background Threads
 threading.Thread(target=track_bandwidth, daemon=True).start()
 
 # ==========================================
@@ -110,17 +110,22 @@ def vod_encode_and_upload(video_id, user_id, videoname, source_url, webhook_url,
     out_dir = f"/var/www/html/hls/vod_{video_id}"
     os.makedirs(out_dir, exist_ok=True)
     
+    # 1. AES-128 Encryption Key & IV Setup
     key_file_path = os.path.join(out_dir, 'enc.key')
     key_info_path = os.path.join(out_dir, 'enc.keyinfo')
     
     encryption_key = secrets.token_bytes(16)
+    iv_hex = secrets.token_hex(16)  # Explicit 16-byte IV in Hex format
+
     with open(key_file_path, 'wb') as f:
         f.write(encryption_key)
         
     with open(key_info_path, 'w') as f:
         f.write(f"{key_api_url}\n")
         f.write(f"{key_file_path}\n")
+        f.write(f"{iv_hex}\n")  # Explicit IV Adding for Transmuxer stability
 
+    # 2. ABR Configuration
     cfg = {
         360: {'scale': '640:360', 'b': '800k', 'max': '1000k', 'buf': '1500k', 'name': '360p'},
         720: {'scale': '1280:720', 'b': '1700k', 'max': '2000k', 'buf': '3000k', 'name': '720p'},
@@ -139,7 +144,7 @@ def vod_encode_and_upload(video_id, user_id, videoname, source_url, webhook_url,
         filt.append(f"[v{i}]scale={c['scale']}[v{i}out]")
         
         map_v.extend(["-map", f"[v{i}out]"])
-        map_a.extend(["-map", "0:a:0"])
+        map_a.extend(["-map", "0:a:0?"])  # Optional mapping to prevent error if audio is missing
         
         enc.extend([
             f"-c:v:{i}", "libx264", 
@@ -155,16 +160,19 @@ def vod_encode_and_upload(video_id, user_id, videoname, source_url, webhook_url,
         ])
         var_map.append(f"v:{i},a:{i},name:{c['name']}")
 
+    # 3. Enhanced FFmpeg Command
     cmd = [
         "ffmpeg", "-y", "-i", source_url,
         "-filter_complex", ";".join(filt),
         *map_v, *map_a,
-        "-c:a", "aac", "-b:a", "128k",
+        "-c:a", "aac", "-b:a", "128k", "-ac", "2", "-ar", "44100",
+        "-bsf:v", "h264_mp4toannexb",  # Fixing Bitstream AnnexB for TS Transmuxing
         *enc,
         "-f", "hls", 
-        "-hls_time", "10", 
+        "-hls_time", "6", 
         "-hls_list_size", "0", 
         "-hls_key_info_file", key_info_path, 
+        "-hls_segment_type", "mpegts",
         "-master_pl_name", "playlist.m3u8",
         "-hls_segment_filename", f"{out_dir}/%v/segment_%03d.ts", 
         "-var_stream_map", " ".join(var_map),
@@ -198,7 +206,16 @@ def vod_encode_and_upload(video_id, user_id, videoname, source_url, webhook_url,
                 local_path = os.path.join(root, file)
                 relative_path = os.path.relpath(local_path, out_dir) 
                 s3_path = f"{s3_folder}/{relative_path}"
-                s3_client.upload_file(local_path, bucket_name, s3_path, ExtraArgs={'ACL': 'public-read'})
+                
+                extra_args = {'ACL': 'public-read'}
+                if file.endswith('.m3u8'):
+                    extra_args['ContentType'] = 'application/x-mpegURL'
+                elif file.endswith('.ts'):
+                    extra_args['ContentType'] = 'video/MP2T'
+                elif file.endswith('.key'):
+                    extra_args['ContentType'] = 'application/octet-stream'
+
+                s3_client.upload_file(local_path, bucket_name, s3_path, ExtraArgs=extra_args)
                 
         hls_url = f"https://{bucket_name}.s3.ap-southeast-1.wasabisys.com/{s3_folder}/playlist.m3u8"
         requests.post(webhook_url, json={"video_id": video_id, "status": "completed", "hls_url": hls_url})
@@ -440,7 +457,7 @@ def restart_worker():
 
         subprocess.run(['systemctl', 'restart', 'sls'])
         time.sleep(1)
-        
+
         subprocess.run(['systemctl', 'restart', 'worker_agent'])
         
     threading.Thread(target=restart_services, daemon=True).start()
