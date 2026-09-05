@@ -8,9 +8,8 @@ User=root
 WorkingDirectory=/var/www
 ExecStart=/usr/bin/python3 /var/www/worker_agent.py
 Restart=always
-RestartSec=60
-
-ExecStopPost=/bin/systemctl restart sls
+RestartSec=10
+TimeoutStopSec=10
 
 [Install]
 WantedBy=multi-user.target
