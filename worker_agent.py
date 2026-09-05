@@ -47,15 +47,26 @@ def patch_m3u8(filepath):
         time.sleep(1)
 
 def monitor_ffmpeg(key, cmd):
-    """FFmpeg Process Monitoring နှင့် Auto-Restart Loop"""
+    """FFmpeg Process Monitoring နှင့် Auto-Restart Loop (Duplicate Prevention Included)"""
     log_file_path = f"/var/www/html/hls/{key}_error.log"
     
     while True:
+        if not os.path.exists(f"/var/www/html/hls/{key}"):
+            break
+
         if os.path.exists(log_file_path) and os.path.getsize(log_file_path) > 10 * 1024 * 1024:
             try:
                 os.remove(log_file_path)
             except Exception:
                 pass
+
+        for proc in psutil.process_iter(['pid', 'cmdline']):
+            try:
+                cmd_line = ' '.join(proc.info.get('cmdline') or [])
+                if 'ffmpeg' in cmd_line and f'/var/www/html/hls/{key}' in cmd_line:
+                    proc.kill()
+            except Exception:
+                continue
 
         try:
             with open(log_file_path, "a") as logfile:
@@ -76,11 +87,7 @@ def monitor_ffmpeg(key, cmd):
         except Exception as e:
             print(f"Logging error: {e}")
 
-        if os.path.exists(f"/var/www/html/hls/{key}"):
-            time.sleep(2)
-            continue 
-        else:
-            break
+        time.sleep(2)
 
 def track_bandwidth():
     """Server Bandwidth Monitoring Thread"""
@@ -100,7 +107,6 @@ def track_bandwidth():
         
         last_io = current_io
 
-# Background Threads
 threading.Thread(target=track_bandwidth, daemon=True).start()
 
 # ==========================================
@@ -123,7 +129,7 @@ def vod_encode_and_upload(video_id, user_id, videoname, source_url, webhook_url,
     with open(key_info_path, 'w') as f:
         f.write(f"{key_api_url}\n")
         f.write(f"{key_file_path}\n")
-        f.write(f"{iv_hex}\n")  # Explicit IV Adding for Transmuxer stability
+        f.write(f"{iv_hex}\n")
 
     # 2. ABR Configuration
     cfg = {
@@ -144,7 +150,7 @@ def vod_encode_and_upload(video_id, user_id, videoname, source_url, webhook_url,
         filt.append(f"[v{i}]scale={c['scale']}[v{i}out]")
         
         map_v.extend(["-map", f"[v{i}out]"])
-        map_a.extend(["-map", "0:a:0?"])  # Optional mapping to prevent error if audio is missing
+        map_a.extend(["-map", "0:a:0?"])
         
         enc.extend([
             f"-c:v:{i}", "libx264", 
@@ -166,7 +172,7 @@ def vod_encode_and_upload(video_id, user_id, videoname, source_url, webhook_url,
         "-filter_complex", ";".join(filt),
         *map_v, *map_a,
         "-c:a", "aac", "-b:a", "128k", "-ac", "2", "-ar", "44100",
-        "-bsf:v", "h264_mp4toannexb",  # Fixing Bitstream AnnexB for TS Transmuxing
+        "-bsf:v", "h264_mp4toannexb",
         *enc,
         "-f", "hls", 
         "-hls_time", "6", 
@@ -289,7 +295,7 @@ def start_encoder():
         c = cfg[o[1:]]
         filt.append(f"[{o}]fps=25,scale={c['scale']}[{o}out]")
         map_v.extend(["-map", f"[{o}out]"])
-        map_a.extend(["-map", "0:a:0"])
+        map_a.extend(["-map", "0:a:0?"])
         enc.extend([
             f"-c:v:{i}", "libx264", 
             f"-b:v:{i}", c['b'], 
@@ -300,13 +306,16 @@ def start_encoder():
         ]) 
         var_map.append(f"v:{i},a:{i},name:{c['name']}")
         
-    cmd = ["ffmpeg", "-y", "-loglevel", "info"]
+    cmd = [
+        "ffmpeg", "-y", "-loglevel", "info",
+        "-analyzeduration", "10M", "-probesize", "10M"
+    ]
     
+    # SRT / RTMP Reconnect Parameters
     if src.startswith("srt://") or source_type == "srt":
         srt_params = "auto-reconnect=1&reconnect_delay=3&max_reconnect_attempts=-1"
         src = f"{src}&{srt_params}" if "?" in src else f"{src}?{srt_params}"
     elif src.startswith("rtmp://") or source_type == "rtmp":
-        # RTMP auto-reconnect
         cmd.extend([
             "-reconnect", "1",
             "-reconnect_at_eof", "1",
@@ -320,7 +329,7 @@ def start_encoder():
         "-i", src,
         "-filter_complex", ";".join(filt), 
         *map_v, *map_a,
-        "-preset", "superfast", "-tune", "zerolatency", "-g", "100", "-keyint_min", "100", "-sc_threshold", "0",
+        "-preset", "superfast", "-tune", "zerolatency", "-g", "50", "-keyint_min", "50", "-sc_threshold", "0",
         "-c:a", "aac", "-b:a", "128k", "-ac", "2", 
         "-ar", "44100",             
         "-af", "aresample=async=1", 
@@ -328,7 +337,7 @@ def start_encoder():
         
         *enc,
         "-f", "hls", "-hls_time", "4", "-hls_list_size", "10", 
-        "-hls_flags", "delete_segments+independent_segments+append_list", 
+        "-hls_flags", "delete_segments+independent_segments+append_list+omit_endlist", 
         "-hls_segment_type", "mpegts", "-vtag", "avc1", "-hls_segment_filename", f"{out_dir}/%v/%s.ts", "-strftime", "1",
         "-var_stream_map", " ".join(var_map), "-master_pl_name", "playlist.m3u8", f"{out_dir}/%v/chunks.m3u8"
     ])
@@ -446,7 +455,7 @@ def restart_worker():
         
     def restart_services():
         time.sleep(1)
-        
+
         for proc in psutil.process_iter(['pid', 'cmdline']):
             try:
                 cmd = ' '.join(proc.info.get('cmdline') or [])
@@ -455,13 +464,14 @@ def restart_worker():
             except Exception:
                 continue
 
-        subprocess.run(['systemctl', 'restart', 'sls'])
-        time.sleep(1)
-
-        subprocess.run(['systemctl', 'restart', 'worker_agent'])
+        subprocess.Popen([
+            "systemd-run", 
+            "bash", "-c", 
+            "systemctl restart worker_agent && sleep 3 && systemctl restart sls"
+        ])
         
     threading.Thread(target=restart_services, daemon=True).start()
-    return jsonify({'status': 'success', 'message': 'Restarting Worker, SLS, and all FFmpeg Streams...'})
+    return jsonify({'status': 'success', 'message': 'Restarting Worker first, waiting 3 seconds, then restarting SLS...'})
 
 @app.route('/health', methods=['GET'])
 def health_check():
