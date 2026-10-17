@@ -65,11 +65,15 @@ echo "127.0.0.1 yourhostname.vm yourhostname" >> /etc/hosts
 sudo ufw enable
 sudo ufw allow 22/tcp
 sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
 sudo ufw allow 5000/tcp
 sudo ufw allow 1935/tcp
 sudo ufw allow 1935/udp
 sudo ufw allow 8888/tcp
 sudo ufw allow 8888/udp
+sudo ufw allow 8080/udp
+sudo ufw allow 8081/udp
+sudo ufw allow 8088/udp
 sudo ufw status
 ```
 
@@ -255,15 +259,20 @@ sudo nano /etc/systemd/system/sls.service
 အောက်ပါ Code ကို ထည့်ပါ-
 ```bash
 [Unit]
-Description=SRT Live Server
-After=network.target
+[Unit]
+Description=Python Worker Agent for Streaming
+After=network.target sls.service
+Wants=sls.service
 
 [Service]
-Type=simple
 User=root
-WorkingDirectory=/usr/src/srt-live-server
-ExecStart=/usr/src/srt-live-server/bin/sls -c /usr/src/srt-live-server/sls.conf
-Restart=on-failure
+WorkingDirectory=/var/www
+ExecStart=/usr/bin/python3 /var/www/worker_agent.py
+Restart=always
+RestartSec=10
+TimeoutStopSec=10
+
+ExecStopPost=/bin/systemctl restart sls
 
 [Install]
 WantedBy=multi-user.target
@@ -278,10 +287,10 @@ sudo systemctl enable worker_agent
 sudo systemctl restart worker_agent
 ```
 
-SRT Server ကို နှိုးရန်
+SRT Server သီးသန့် နှိုးရန်
 ```bash
 sudo systemctl start sls
 sudo systemctl enable sls
-sudo systemctl status sls
+sudo systemctl status sls --no-pager
 sudo systemctl restart sls
 ```
