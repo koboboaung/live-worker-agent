@@ -174,24 +174,77 @@ srt {
     worker_connections 100;
     log_file logs/error.log;
     log_level info;
-	record_hls_path_prefix /var/www/html/dvr;
-    
+    record_hls_path_prefix /var/www/html/dvr;
+
     server {
-        listen 8888;
-        latency 200;
+        listen 8080;
+        latency 300;
         domain_player playstream;
         domain_publisher pushstream;
         backlog 100;
-        idle_streams_timeout 60; #s -1: unlimited
-        
+        idle_streams_timeout 60;
+        on_event_url http://127.0.0.1:5000/sls/on_event;
+
         app {
             app_player live;
             app_publisher live;
-            record_hls off; #on
-			record_hls_segment_duration 10; #unit s
+            record_hls off;
+            record_hls_segment_duration 10;
+        }
+    }
+
+    server {
+        listen 8081;
+        latency 300;
+        domain_player playstream;
+        domain_publisher pushstream;
+        backlog 100;
+        idle_streams_timeout 60;
+        on_event_url http://127.0.0.1:5000/sls/on_event;
+
+        app {
+            app_player live;
+            app_publisher live;
+            record_hls off;
+            record_hls_segment_duration 10;
+        }
+    }
+
+    server {
+        listen 8088;
+        latency 300;
+        domain_player playstream;
+        domain_publisher pushstream;
+        backlog 100;
+        idle_streams_timeout 60;
+        on_event_url http://127.0.0.1:5000/sls/on_event;
+
+        app {
+            app_player live;
+            app_publisher live;
+            record_hls off;
+            record_hls_segment_duration 10;
+        }
+    }
+
+    server {
+        listen 10000;
+        latency 300;
+        domain_player playstream;
+        domain_publisher pushstream;
+        backlog 100;
+        idle_streams_timeout 60;
+        on_event_url http://127.0.0.1:5000/sls/on_event;
+
+        app {
+            app_player live;
+            app_publisher live;
+            record_hls off;
+            record_hls_segment_duration 10;
         }
     }
 }
+
 ```
 
 SLS Service အသစ် ဖန်တီးရန်
