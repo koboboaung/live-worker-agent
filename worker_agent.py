@@ -15,8 +15,7 @@ from flask_cors import CORS
 
 app = Flask(__name__)
 CORS(app)
-
-# Main Server IP
+# ESPORT ENCODER
 ALLOWED_IPS = ['127.0.0.1', '146.190.90.223', '10.104.0.7']
 
 # Global State Variables
@@ -51,15 +50,11 @@ def monitor_ffmpeg(key, cmd):
     log_file_path = f"/var/www/html/hls/{key}_error.log"
     
     while True:
+        # HLS Folder မရှိတော့ပါက Loop ကို ရပ်မည် (Stop API ခေါ်လိုက်ပါက)
         if not os.path.exists(f"/var/www/html/hls/{key}"):
             break
 
-        if os.path.exists(log_file_path) and os.path.getsize(log_file_path) > 10 * 1024 * 1024:
-            try:
-                os.remove(log_file_path)
-            except Exception:
-                pass
-
+        # Process မစမီ Process အဟောင်းများ Hang ပြီး ကျန်ခဲ့ပါက Kill လုပ်ပေးခြင်း
         for proc in psutil.process_iter(['pid', 'cmdline']):
             try:
                 cmd_line = ' '.join(proc.info.get('cmdline') or [])
@@ -80,7 +75,22 @@ def monitor_ffmpeg(key, cmd):
                     stdin=subprocess.DEVNULL, 
                     close_fds=True
                 )
-                process.wait()
+                
+                # အရင်က process.wait() နေရာတွင် အောက်ပါအတိုင်း အစားထိုးပါ
+                while process.poll() is None:
+                    time.sleep(10) # ၁၀ စက္ကန့်တစ်ကြိမ် စစ်ဆေးမည်
+                    
+                    # Stop API ခေါ်လိုက်၍ Folder ဖျက်ခံရပါက ချက်ချင်းရပ်မည်
+                    if not os.path.exists(f"/var/www/html/hls/{key}"):
+                        process.kill()
+                        break
+                    
+                    # 10MB ပြည့်ပါက File ကို Delete မလုပ်ဘဲ Size 0 ဖြစ်အောင် ရှင်းထုတ်မည် (Truncate)
+                    if os.path.exists(log_file_path) and os.path.getsize(log_file_path) > 10 * 1024 * 1024:
+                        try:
+                            open(log_file_path, 'w').close()
+                        except Exception:
+                            pass
                 
                 stop_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 logfile.write(f"[{stop_time}] --- FFmpeg stopped with exit code: {process.returncode} ---\n")
@@ -106,6 +116,7 @@ def track_bandwidth():
         server_bandwidth["total_mbps"] = round(dl_mbps + ul_mbps, 2)
         
         last_io = current_io
+
 
 threading.Thread(target=track_bandwidth, daemon=True).start()
 
@@ -283,14 +294,15 @@ def start_encoder():
     os.makedirs(out_dir, exist_ok=True)
     
     cfg = {
-        '360': {'scale': '640:360', 'b': '800k', 'max': '1000k', 'buf': '1500k', 'name': '360p'},
-        '720': {'scale': '1280:720', 'b': '1700k', 'max': '2000k', 'buf': '3000k', 'name': '720p'},
-        '1080': {'scale': '1920:1080', 'b': '4000k', 'max': '5000k', 'buf': '7000k', 'name': '1080p'}
+        '360': {'scale': '640:360', 'crf': '24', 'max': '800k', 'buf': '1600k', 'name': '360p'},
+        '720': {'scale': '1280:720', 'crf': '22', 'max': '1700k', 'buf': '3000k', 'name': '720p'},
+        '1080': {'scale': '1920:1080', 'crf': '20', 'max': '4000k', 'buf': '8000k', 'name': '1080p'}
     }
+
     outputs = [f'v{r}' for r in [360,720,1080] if res[r]]
     filt = [f"[0:v:0]split={len(outputs)}" + "".join(f"[{o}]" for o in outputs)]
     map_v, map_a, enc, var_map = [], [], [], []
-    
+
     for i, o in enumerate(outputs):
         c = cfg[o[1:]]
         filt.append(f"[{o}]fps=25,scale={c['scale']}[{o}out]")
@@ -298,13 +310,17 @@ def start_encoder():
         map_a.extend(["-map", "0:a:0?"])
         enc.extend([
             f"-c:v:{i}", "libx264", 
-            f"-b:v:{i}", c['b'], 
-            f"-maxrate:v:{i}", c['max'], 
+            f"-crf:v:{i}", c['crf'],
+            f"-maxrate:v:{i}", c['max'],  
             f"-bufsize:v:{i}", c['buf'], 
             f"-profile:v:{i}", "main",
             f"-r:v:{i}", "25",
+            f"-g:v:{i}", "50",
+            f"-keyint_min:v:{i}", "50",
+            "-sc_threshold", "0"
         ]) 
         var_map.append(f"v:{i},a:{i},name:{c['name']}")
+    
         
     cmd = [
         "ffmpeg", "-y", "-loglevel", "info",
@@ -316,12 +332,10 @@ def start_encoder():
         srt_params = "auto-reconnect=1&reconnect_delay=3&max_reconnect_attempts=-1"
         src = f"{src}&{srt_params}" if "?" in src else f"{src}?{srt_params}"
     elif src.startswith("rtmp://") or source_type == "rtmp":
+        # RTMP auto-reconnect အတွက် FFmpeg input flags ဖြည့်သွင်းခြင်း
         cmd.extend([
-            "-reconnect", "1",
-            "-reconnect_at_eof", "1",
-            "-reconnect_streamed", "1",
-            "-reconnect_delay_max", "5",
-            "-rw_timeout", "10000000"
+            "-rw_timeout", "10000000",       # 10 စက္ကန့်အတွင်း data မလာပါက exit လုပ်မည်
+            "-listen_timeout", "5000"
         ])
 
     cmd.extend([
@@ -455,7 +469,7 @@ def restart_worker():
         
     def restart_services():
         time.sleep(1)
-
+        
         for proc in psutil.process_iter(['pid', 'cmdline']):
             try:
                 cmd = ' '.join(proc.info.get('cmdline') or [])
