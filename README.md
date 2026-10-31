@@ -70,10 +70,11 @@ sudo ufw allow 5000/tcp
 sudo ufw allow 1935/tcp
 sudo ufw allow 1935/udp
 sudo ufw allow 8888/tcp
-sudo ufw allow 8888/udp
+sudo ufw allow 443/udp
 sudo ufw allow 8080/udp
 sudo ufw allow 8081/udp
 sudo ufw allow 8088/udp
+sudo ufw allow 8888/udp
 sudo ufw status
 ```
 
@@ -232,7 +233,7 @@ srt {
     }
 
     server {
-        listen 10000;
+        listen 3478;
         latency 300;
         domain_player playstream;
         domain_publisher pushstream;
@@ -247,7 +248,26 @@ srt {
             record_hls_segment_duration 10;
         }
     }
+
+    server {
+        listen 443;
+        latency 300;
+        domain_player playstream;
+        domain_publisher pushstream;
+        backlog 100;
+        idle_streams_timeout 60;
+        on_event_url http://127.0.0.1:5000/sls/on_event;
+
+        app {
+            app_player live;
+            app_publisher live;
+            record_hls off;
+            record_hls_segment_duration 10;
+        }
+    }    
+    
 }
+
 
 ```
 
@@ -259,20 +279,15 @@ sudo nano /etc/systemd/system/sls.service
 အောက်ပါ Code ကို ထည့်ပါ-
 ```bash
 [Unit]
-[Unit]
-Description=Python Worker Agent for Streaming
-After=network.target sls.service
-Wants=sls.service
+Description=SRT Live Server
+After=network.target
 
 [Service]
+Type=simple
 User=root
-WorkingDirectory=/var/www
-ExecStart=/usr/bin/python3 /var/www/worker_agent.py
-Restart=always
-RestartSec=10
-TimeoutStopSec=10
-
-ExecStopPost=/bin/systemctl restart sls
+WorkingDirectory=/usr/src/srt-live-server
+ExecStart=/usr/src/srt-live-server/bin/sls -c /usr/src/srt-live-server/sls.conf
+Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target
@@ -293,4 +308,5 @@ sudo systemctl start sls
 sudo systemctl enable sls
 sudo systemctl status sls --no-pager
 sudo systemctl restart sls
+grep -n 'listen' /usr/src/srt-live-server/sls.conf
 ```
