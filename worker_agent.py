@@ -50,11 +50,9 @@ def monitor_ffmpeg(key, cmd):
     log_file_path = f"/var/www/html/hls/{key}_error.log"
     
     while True:
-        # HLS Folder မရှိတော့ပါက Loop ကို ရပ်မည် (Stop API ခေါ်လိုက်ပါက)
         if not os.path.exists(f"/var/www/html/hls/{key}"):
             break
 
-        # Process မစမီ Process အဟောင်းများ Hang ပြီး ကျန်ခဲ့ပါက Kill လုပ်ပေးခြင်း
         for proc in psutil.process_iter(['pid', 'cmdline']):
             try:
                 cmd_line = ' '.join(proc.info.get('cmdline') or [])
@@ -76,17 +74,14 @@ def monitor_ffmpeg(key, cmd):
                     close_fds=True
                 )
                 
-                # အရင်က process.wait() နေရာတွင် အောက်ပါအတိုင်း အစားထိုးပါ
                 while process.poll() is None:
-                    time.sleep(10) # ၁၀ စက္ကန့်တစ်ကြိမ် စစ်ဆေးမည်
-                    
-                    # Stop API ခေါ်လိုက်၍ Folder ဖျက်ခံရပါက ချက်ချင်းရပ်မည်
+                    time.sleep(10)
+
                     if not os.path.exists(f"/var/www/html/hls/{key}"):
                         process.kill()
                         break
                     
-                    # 10MB ပြည့်ပါက File ကို Delete မလုပ်ဘဲ Size 0 ဖြစ်အောင် ရှင်းထုတ်မည် (Truncate)
-                    if os.path.exists(log_file_path) and os.path.getsize(log_file_path) > 10 * 1024 * 1024:
+                    if os.path.exists(log_file_path) and os.path.getsize(log_file_path) > 5 * 1024 * 1024:
                         try:
                             open(log_file_path, 'w').close()
                         except Exception:
@@ -293,61 +288,62 @@ def start_encoder():
     out_dir = f"/var/www/html/hls/{key}"
     os.makedirs(out_dir, exist_ok=True)
     
+    # (baseline, main, or high).
     cfg = {
-        '360': {'scale': '640:360', 'crf': '24', 'max': '800k', 'buf': '1600k', 'name': '360p'},
-        '720': {'scale': '1280:720', 'crf': '22', 'max': '1700k', 'buf': '3000k', 'name': '720p'},
-        '1080': {'scale': '1920:1080', 'crf': '20', 'max': '4000k', 'buf': '8000k', 'name': '1080p'}
+        '360': {'scale': '640:360', 'crf': '26', 'max': '800k', 'buf': '1600k', 'profile': 'baseline', 'name': '360p'},
+        '720': {'scale': '1280:720', 'crf': '24', 'max': '1600k', 'buf': '2500k', 'profile': 'baseline', 'name': '720p'},
+        '1080': {'scale': '1920:1080', 'crf': '22', 'max': '4000k', 'buf': '6000k', 'profile': 'high', 'name': '1080p'}
     }
 
-    outputs = [f'v{r}' for r in [360,720,1080] if res[r]]
+    outputs = [f'v{r}' for r in [360, 720, 1080] if res[r]]
     filt = [f"[0:v:0]split={len(outputs)}" + "".join(f"[{o}]" for o in outputs)]
     map_v, map_a, enc, var_map = [], [], [], []
 
     for i, o in enumerate(outputs):
         c = cfg[o[1:]]
-        filt.append(f"[{o}]fps=25,scale={c['scale']}[{o}out]")
+        filt.append(
+            f"[{o}]fps=25,scale={c['scale']}:in_color_matrix=auto:out_color_matrix=bt709:in_range=auto:out_range=tv[{o}out]"
+        )
         map_v.extend(["-map", f"[{o}out]"])
         map_a.extend(["-map", "0:a:0?"])
         enc.extend([
-            f"-c:v:{i}", "libx264", 
+            f"-c:v:{i}", "libx264",
+            f"-colorspace:v:{i}", "bt709",
             f"-crf:v:{i}", c['crf'],
-            f"-maxrate:v:{i}", c['max'],  
+            f"-maxrate:v:{i}", c['max'],
             f"-bufsize:v:{i}", c['buf'], 
-            f"-profile:v:{i}", "main",
+            f"-profile:v:{i}", c['profile'],
             f"-r:v:{i}", "25",
             f"-g:v:{i}", "50",
             f"-keyint_min:v:{i}", "50",
             "-sc_threshold", "0"
         ]) 
         var_map.append(f"v:{i},a:{i},name:{c['name']}")
-    
         
     cmd = [
         "ffmpeg", "-y", "-loglevel", "info",
-        "-analyzeduration", "10M", "-probesize", "10M"
+        "-analyzeduration", "5M", "-probesize", "5M"
     ]
     
-    # SRT / RTMP Reconnect Parameters
     if src.startswith("srt://") or source_type == "srt":
         srt_params = "auto-reconnect=1&reconnect_delay=3&max_reconnect_attempts=-1"
         src = f"{src}&{srt_params}" if "?" in src else f"{src}?{srt_params}"
     elif src.startswith("rtmp://") or source_type == "rtmp":
-        # RTMP auto-reconnect အတွက် FFmpeg input flags ဖြည့်သွင်းခြင်း
         cmd.extend([
-            "-rw_timeout", "10000000",       # 10 စက္ကန့်အတွင်း data မလာပါက exit လုပ်မည်
+            "-rw_timeout", "10000000",
             "-listen_timeout", "5000"
         ])
 
     cmd.extend([
         "-fflags", "+genpts+discardcorrupt", 
-        "-i", src,
+        "-i", src, 
         "-filter_complex", ";".join(filt), 
         *map_v, *map_a,
-        "-preset", "superfast", "-tune", "zerolatency", "-g", "50", "-keyint_min", "50", "-sc_threshold", "0",
+        "-preset", "superfast", 
         "-c:a", "aac", "-b:a", "128k", "-ac", "2", 
-        "-ar", "44100",             
+        "-ar", "44100", 
         "-af", "aresample=async=1", 
-        "-fps_mode", "cfr",          
+        "-fps_mode", "cfr", 
         
         *enc,
         "-f", "hls", "-hls_time", "4", "-hls_list_size", "10", 
@@ -477,7 +473,7 @@ def restart_worker():
                     proc.kill()
             except Exception:
                 continue
-
+        
         subprocess.Popen([
             "systemd-run", 
             "bash", "-c", 
