@@ -1,16 +1,13 @@
 [Unit]
-Description=Python Worker Agent for Streaming
-After=network.target sls.service
-Wants=sls.service
+Description=SRT Live Server
+After=network.target
 
 [Service]
+Type=simple
 User=root
-WorkingDirectory=/var/www
-ExecStart=/usr/bin/python3 /var/www/worker_agent.py
-Restart=always
-RestartSec=10
-TimeoutStopSec=10
-ExecStopPost=/bin/systemctl restart sls
+WorkingDirectory=/usr/src/srt-live-server
+ExecStart=/usr/src/srt-live-server/bin/sls -c /usr/src/srt-live-server/sls.conf
+Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target
